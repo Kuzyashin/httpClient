@@ -24,13 +24,38 @@ type Client interface {
 	MakeHeadRequest(ctx context.Context, url string) (status int, err error)
 }
 
-func NewClient(log *zap.Logger, config *ClientConfig, manager ProxyManager) Client {
+func NewClient(log *zap.Logger, config *ClientConfig, opts ...CliOpt) Client {
 	logger := log.Named("http_client")
-	return &client{log: logger, cfg: config, proxyManager: manager}
+	cli := &client{log: logger, cfg: config}
+	for _, opt := range opts {
+		opt(cli)
+	}
+	return cli
 }
 
 func (c *client) AddHeaderFun(fun func(*fasthttp.Request)) {
 	c.headerFuncs = append(c.headerFuncs, fun)
+}
+
+func (c *client) getClient() *fasthttp.Client {
+	cli := fasthttp.Client{
+		ReadTimeout:                   c.cfg.FastHTTPConfig.ReadTimeout,
+		WriteTimeout:                  c.cfg.FastHTTPConfig.WriteTimeout,
+		NoDefaultUserAgentHeader:      c.cfg.FastHTTPConfig.NoDefaultUserAgentHeader,
+		DisableHeaderNamesNormalizing: c.cfg.FastHTTPConfig.DisableHeaderNamesNormalizing,
+		DisablePathNormalizing:        c.cfg.FastHTTPConfig.DisablePathNormalizing,
+
+		MaxConnsPerHost:     c.cfg.FastHTTPConfig.MaxConnsPerHost,
+		MaxIdleConnDuration: c.cfg.FastHTTPConfig.MaxIdleConnDuration,
+		MaxConnDuration:     c.cfg.FastHTTPConfig.MaxConnDuration,
+		DialDualStack:       c.cfg.FastHTTPConfig.DialDualStack,
+		TLSConfig:           c.cfg.FastHTTPConfig.TLSConfig,
+	}
+	if c.proxyManager != nil {
+		proxy := c.proxyManager.GetProxy()
+		cli.Dial = c.getDialer(proxy)
+	}
+	return &cli
 }
 
 func (c *client) getDialer(proxy string) fasthttp.DialFunc {
@@ -53,23 +78,9 @@ func (c *client) makeRequest(ctx context.Context, url string, ignoreBody bool, r
 	if retries > c.cfg.MaxRetries {
 		return nil, 0, fmt.Errorf("max retries count reached")
 	}
-	proxy := c.proxyManager.GetProxy()
-	cli := fasthttp.Client{
-		ReadTimeout:                   c.cfg.FastHTTPConfig.ReadTimeout,
-		WriteTimeout:                  c.cfg.FastHTTPConfig.WriteTimeout,
-		Dial:                          c.getDialer(proxy),
-		NoDefaultUserAgentHeader:      c.cfg.FastHTTPConfig.NoDefaultUserAgentHeader,
-		DisableHeaderNamesNormalizing: c.cfg.FastHTTPConfig.DisableHeaderNamesNormalizing,
-		DisablePathNormalizing:        c.cfg.FastHTTPConfig.DisablePathNormalizing,
-
-		MaxConnsPerHost:     c.cfg.FastHTTPConfig.MaxConnsPerHost,
-		MaxIdleConnDuration: c.cfg.FastHTTPConfig.MaxIdleConnDuration,
-		MaxConnDuration:     c.cfg.FastHTTPConfig.MaxConnDuration,
-		DialDualStack:       c.cfg.FastHTTPConfig.DialDualStack,
-		TLSConfig:           c.cfg.FastHTTPConfig.TLSConfig,
-	}
+	cli := c.getClient()
 	for _, opt := range opts {
-		opt(&cli)
+		opt(cli)
 	}
 	defer cli.CloseIdleConnections()
 	var body []byte
@@ -119,21 +130,7 @@ func (c *client) makeHeadRequest(ctx context.Context, url string, retries int) (
 	if retries > c.cfg.MaxRetries {
 		return 0, fmt.Errorf("max retries count reached")
 	}
-	proxy := c.proxyManager.GetProxy()
-	cli := fasthttp.Client{
-		ReadTimeout:                   c.cfg.FastHTTPConfig.ReadTimeout,
-		WriteTimeout:                  c.cfg.FastHTTPConfig.WriteTimeout,
-		Dial:                          c.getDialer(proxy),
-		NoDefaultUserAgentHeader:      c.cfg.FastHTTPConfig.NoDefaultUserAgentHeader,
-		DisableHeaderNamesNormalizing: c.cfg.FastHTTPConfig.DisableHeaderNamesNormalizing,
-		DisablePathNormalizing:        c.cfg.FastHTTPConfig.DisablePathNormalizing,
-
-		MaxConnsPerHost:     c.cfg.FastHTTPConfig.MaxConnsPerHost,
-		MaxIdleConnDuration: c.cfg.FastHTTPConfig.MaxIdleConnDuration,
-		MaxConnDuration:     c.cfg.FastHTTPConfig.MaxConnDuration,
-		DialDualStack:       c.cfg.FastHTTPConfig.DialDualStack,
-		TLSConfig:           c.cfg.FastHTTPConfig.TLSConfig,
-	}
+	cli := c.getClient()
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	for _, fun := range c.headerFuncs {

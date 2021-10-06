@@ -53,48 +53,6 @@ func ProxyFromList(proxyList []string) ProxyFun {
 	}
 }
 
-func NewProxyManager(log *zap.Logger, updateInterval time.Duration, proxyFuns ...ProxyFun) ProxyManager {
-	logger := log.Named("proxy_manager")
-	var proxyList []string
-	for _, fun := range proxyFuns {
-		tmpProxy, err := fun()
-		if err != nil {
-			logger.Error("can not call proxy func", zap.Error(err))
-			continue
-		}
-		proxyList = append(proxyList, tmpProxy...)
-	}
-	pm := &proxyManager{
-		log:          log,
-		proxies:      proxyList,
-		mu:           sync.Mutex{},
-		totalProxies: len(proxyList),
-		lastProxyIdx: 0,
-	}
-	if updateInterval != 0 {
-		if updateInterval < time.Minute {
-			updateInterval = time.Minute
-		}
-		go pm.updater(updateInterval, proxyFuns...)
-	}
-	return pm
-}
-
-func (p *proxyManager) GetProxy() string {
-	if p.totalProxies == 1 {
-		return p.proxies[0]
-	}
-	p.mu.Lock()
-	switch p.lastProxyIdx {
-	case p.totalProxies - 1:
-		p.lastProxyIdx = 0
-	default:
-		p.lastProxyIdx += 1
-	}
-	p.mu.Unlock()
-	return p.proxies[p.lastProxyIdx]
-}
-
 func ProxyFromHideMyNameUrl(apiToken string) ([]string, error) {
 	var (
 		proxyList []string
@@ -152,6 +110,48 @@ func ProxyFromHideMyNameFile(filePath string) ([]string, error) {
 		}
 	}
 	return proxyList, nil
+}
+
+func NewProxyManager(log *zap.Logger, updateInterval time.Duration, proxyFuns ...ProxyFun) ProxyManager {
+	logger := log.Named("proxy_manager")
+	var proxyList []string
+	for _, fun := range proxyFuns {
+		tmpProxy, err := fun()
+		if err != nil {
+			logger.Error("can not call proxy func", zap.Error(err))
+			continue
+		}
+		proxyList = append(proxyList, tmpProxy...)
+	}
+	pm := &proxyManager{
+		log:          log,
+		proxies:      proxyList,
+		mu:           sync.Mutex{},
+		totalProxies: len(proxyList),
+		lastProxyIdx: 0,
+	}
+	if updateInterval != 0 {
+		if updateInterval < time.Minute {
+			updateInterval = time.Minute
+		}
+		go pm.updater(updateInterval, proxyFuns...)
+	}
+	return pm
+}
+
+func (p *proxyManager) GetProxy() string {
+	if p.totalProxies == 1 {
+		return p.proxies[0]
+	}
+	p.mu.Lock()
+	switch p.lastProxyIdx {
+	case p.totalProxies - 1:
+		p.lastProxyIdx = 0
+	default:
+		p.lastProxyIdx += 1
+	}
+	p.mu.Unlock()
+	return p.proxies[p.lastProxyIdx]
 }
 
 func (p *proxyManager) updater(updateInterval time.Duration, proxyFuncs ...ProxyFun) {
