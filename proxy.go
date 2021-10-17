@@ -58,7 +58,7 @@ func ProxyFromHideMyNameUrl(apiToken string) ([]string, error) {
 		proxyList []string
 		tmpProxy  []HideMyNameProxy
 	)
-	hideMyNameApiUrl := fmt.Sprintf("%s&key=%s", hideMyNameUrl, apiToken)
+	hideMyNameApiUrl := fmt.Sprintf("%s&code=%s", hideMyNameUrl, apiToken)
 	_, body, err := fasthttp.Get(nil, hideMyNameApiUrl)
 	if err != nil {
 		return proxyList, err
