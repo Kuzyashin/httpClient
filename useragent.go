@@ -3,6 +3,7 @@ package httpClient
 import (
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/valyala/fasthttp"
 )
@@ -20,11 +21,13 @@ var uaGensMobile = []func() string{
 
 // RandomUserAgent generates a random DESKTOP browser user-agent on every requests
 func RandomUserAgent(r *fasthttp.Request) {
+	rand.Seed(time.Now().UnixNano())
 	r.Header.Set("User-Agent", uaGens[rand.Intn(len(uaGens))]())
 }
 
 // RandomMobileUserAgent generates a random MOBILE browser user-agent on every requests
 func RandomMobileUserAgent(r *fasthttp.Request) {
+	rand.Seed(time.Now().UnixNano())
 	r.Header.Set("User-Agent", uaGens[rand.Intn(len(uaGensMobile))]())
 
 }

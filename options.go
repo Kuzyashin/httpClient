@@ -14,6 +14,12 @@ func WithReadTimeout(duration time.Duration) FastHttpCliOpt {
 	}
 }
 
+func WithWriteTimeout(duration time.Duration) FastHttpCliOpt {
+	return func(client *fasthttp.Client) {
+		client.WriteTimeout = duration
+	}
+}
+
 type CliOpt func(client *client)
 
 func WithProxyManager(manager ProxyManager) CliOpt {

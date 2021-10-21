@@ -3,9 +3,9 @@ module github.com/kuzyashin/httpClient
 go 1.17
 
 require (
-	github.com/valyala/fasthttp v1.30.0
+	github.com/valyala/fasthttp v1.31.0
 	go.uber.org/zap v1.19.1
-	golang.org/x/net v0.0.0-20211005001312-d4b1ae081e3b
+	golang.org/x/net v0.0.0-20211020060615-d418f374d309
 	h12.io/socks v1.0.3
 )
 

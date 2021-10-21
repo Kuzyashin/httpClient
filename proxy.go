@@ -1,6 +1,7 @@
 package httpClient
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -35,6 +36,7 @@ type HideMyNameProxy struct {
 
 type proxyManager struct {
 	log          *zap.Logger
+	ctx          context.Context
 	mu           sync.Mutex
 	proxies      []string
 	totalProxies int
@@ -112,10 +114,10 @@ func ProxyFromHideMyNameFile(filePath string) ([]string, error) {
 	return proxyList, nil
 }
 
-func NewProxyManager(log *zap.Logger, updateInterval time.Duration, proxyFuns ...ProxyFun) ProxyManager {
+func NewProxyManager(ctx context.Context, log *zap.Logger, updateInterval time.Duration, proxyFuncs ...ProxyFun) ProxyManager {
 	logger := log.Named("proxy_manager")
 	var proxyList []string
-	for _, fun := range proxyFuns {
+	for _, fun := range proxyFuncs {
 		tmpProxy, err := fun()
 		if err != nil {
 			logger.Error("can not call proxy func", zap.Error(err))
@@ -123,8 +125,12 @@ func NewProxyManager(log *zap.Logger, updateInterval time.Duration, proxyFuns ..
 		}
 		proxyList = append(proxyList, tmpProxy...)
 	}
+	if len(proxyList) == 0 {
+		return nil
+	}
 	pm := &proxyManager{
 		log:          log,
+		ctx:          ctx,
 		proxies:      proxyList,
 		mu:           sync.Mutex{},
 		totalProxies: len(proxyList),
@@ -134,7 +140,7 @@ func NewProxyManager(log *zap.Logger, updateInterval time.Duration, proxyFuns ..
 		if updateInterval < time.Minute {
 			updateInterval = time.Minute
 		}
-		go pm.updater(updateInterval, proxyFuns...)
+		go pm.updater(updateInterval, proxyFuncs...)
 	}
 	return pm
 }
@@ -156,9 +162,13 @@ func (p *proxyManager) GetProxy() string {
 
 func (p *proxyManager) updater(updateInterval time.Duration, proxyFuncs ...ProxyFun) {
 	p.log.Info("proxy updater started", zap.Duration("interval", updateInterval))
+	defer p.log.Info("proxy updater stopped")
 	ticker := time.NewTicker(updateInterval)
 	for {
 		select {
+		case <-p.ctx.Done():
+			p.log.Info("stopping proxy updater...")
+			return
 		case <-ticker.C:
 			p.log.Info("updating proxy list")
 			var proxyList []string
